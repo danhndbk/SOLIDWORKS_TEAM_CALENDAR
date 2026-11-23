@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOLIDWORKS利用管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'media', // Tự động theo hệ điều hành/trình duyệt
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Tùy chỉnh thanh cuộn */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Thanh cuộn cho Dark Mode (Đen tuyền) */
+        @media (prefers-color-scheme: dark) {
+            ::-webkit-scrollbar-track { background: #000000; }
+            ::-webkit-scrollbar-thumb { background: #333333; }
+            ::-webkit-scrollbar-thumb:hover { background: #555555; }
+        }
+        
+        /* Layout dạng lưới cho Lịch */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: 220px repeat(7, minmax(160px, 1fr));
+        }
+        
+        /* Khối sự kiện */
+        .event-block {
+            transition: all 0.2s;
+        }
+        .event-block:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Tùy chỉnh input date để làm overlay cho toàn bộ vùng chọn */
+        .date-picker-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .date-picker-overlay::-webkit-calendar-picker-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            opacity: 0;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-black h-screen flex flex-col font-sans text-base text-slate-800 dark:text-neutral-200">
+
+    <!-- Header -->
+    <header class="bg-blue-600 dark:bg-blue-900 text-white flex justify-between items-center px-4 py-3 shadow-md z-20 border-b dark:border-neutral-800">
+        <div class="flex items-center gap-3">
+            <div class="bg-white dark:bg-neutral-900 p-1 rounded shadow-sm flex items-center justify-center w-10 h-10 shrink-0">
+                <img src="image_30ffc4.png" alt="SolidWorks Logo" class="w-full h-full object-contain" onerror="this.onerror=null; this.src='https://placehold.co/40x40/cc0000/ffffff?text=SW';">
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight">SOLIDWORKS チームカレンダー</h1>
+                <p class="text-blue-200 dark:text-blue-300 text-base">3D CAD設計ステーション管理</p>
+            </div>
+        </div>
+        <div class="flex gap-2 items-center">
+            <!-- Nút Định danh người dùng -->
+            <div id="currentUserDisplay" class="hidden items-center gap-2 mr-3 bg-blue-700 dark:bg-blue-800 px-3 py-1.5 rounded-full shadow-inner border border-blue-500 dark:border-blue-700">
+                <i class="fas fa-user-circle text-blue-200 text-lg"></i>
+                <span id="currentUserName" class="font-bold text-sm"></span>
+                <button onclick="switchUser()" class="ml-1 text-blue-300 hover:text-white transition-colors" title="ユーザー切り替え">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+
+            <!-- Nút đọc dữ liệu -->
+            <button onclick="handleReadDB()" class="bg-white dark:bg-neutral-900 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-neutral-800 px-3 py-1.5 rounded font-medium text-base flex items-center gap-1.5 shadow transition-colors">
+                <i class="fas fa-folder-open"></i> DB読込
+            </button>
+            <input type="file" id="fileInput" class="hidden" accept=".json" onchange="loadDatabase(event)">
+            
+            <!-- Nút lưu dữ liệu vào File Server -->
+            <button onclick="saveDatabase()" class="bg-orange-500 hover:bg-orange-600 dark:bg-orange-700 dark:hover:bg-orange-600 text-white px-3 py-1.5 rounded font-medium text-base flex items-center gap-1.5 shadow transition-colors">
+                <i class="fas fa-database"></i> DB保存
+            </button>
+
+            <div class="w-px h-6 bg-blue-400 dark:bg-blue-700 mx-1"></div> <!-- Dấu gạch chia cách -->
+
+            <!-- Nút lưu tạm vào Browser Memory -->
+            <button onclick="saveToBrowser()" class="bg-teal-500 hover:bg-teal-600 dark:bg-teal-700 dark:hover:bg-teal-600 text-white px-3 py-1.5 rounded font-medium text-base flex items-center gap-1.5 shadow transition-colors" title="ブラウザに一時保存">
+                <i class="fas fa-bookmark"></i> 一時保存
+            </button>
+            <!-- Nút phục hồi dữ liệu tạm -->
+            <button onclick="loadFromBrowser()" class="bg-white dark:bg-neutral-900 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-neutral-800 px-3 py-1.5 rounded font-medium text-base flex items-center gap-1.5 shadow transition-colors" title="一時保存から復元">
+                <i class="fas fa-history"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Toolbar điều hướng lịch -->
+    <div class="bg-white dark:bg-neutral-900 border-b dark:border-neutral-800 flex items-center p-3 gap-4 shadow-sm z-10">
+        <div class="flex rounded-md border border-slate-300 dark:border-neutral-700 bg-slate-100 dark:bg-black p-0.5">
+            <button id="btnViewDay" onclick="setView('day')" class="px-5 py-1.5 rounded font-semibold text-slate-500 dark:text-neutral-400 hover:text-slate-700 dark:hover:text-neutral-200 transition-colors text-base">日</button>
+            <button id="btnViewWeek" onclick="setView('week')" class="px-5 py-1.5 rounded bg-white dark:bg-neutral-800 shadow-sm font-semibold text-slate-700 dark:text-neutral-200 transition-colors text-base">週</button>
+        </div>
+        
+        <!-- Hiển thị khoảng ngày + Calendar Picker ẩn -->
+        <div class="relative flex items-center gap-2 font-bold text-blue-700 dark:text-blue-400 text-lg px-4 py-1.5 rounded hover:bg-blue-50 dark:hover:bg-neutral-800 cursor-pointer transition-colors group" title="日付を選択してジャンプ">
+            <!-- Nút Date Picker (Phủ toàn bộ vùng để trình duyệt tự mở lịch khi click) -->
+            <input type="date" id="weekPicker" class="date-picker-overlay" onchange="jumpToDate(this.value)">
+            
+            <i class="far fa-calendar-alt text-blue-500 group-hover:text-blue-600 dark:group-hover:text-blue-300 relative z-0"></i>
+            <span id="dateRangeText" class="relative z-0">
+                <!-- Nội dung ngày tháng sẽ chèn bằng JS -->
+            </span>
+            <i class="fas fa-chevron-down text-base text-slate-400 group-hover:text-blue-500 dark:group-hover:text-blue-300 ml-1 relative z-0"></i>
+        </div>
+        
+        <div class="flex gap-1 ml-auto">
+            <button onclick="navigateTime(-1)" class="px-4 py-1.5 border border-slate-300 dark:border-neutral-700 rounded text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors text-base">
+                <i class="fas fa-chevron-left mr-1"></i> 前
+            </button>
+            <button onclick="goToToday()" class="px-4 py-1.5 border border-slate-300 dark:border-neutral-700 rounded font-medium text-slate-700 dark:text-neutral-200 hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors text-base">
+                今日
+            </button>
+            <button onclick="navigateTime(1)" class="px-4 py-1.5 border border-slate-300 dark:border-neutral-700 rounded text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-800 transition-colors text-base">
+                次 <i class="fas fa-chevron-right ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content: Lưới Lịch -->
+    <div class="flex-1 overflow-auto flex bg-white dark:bg-black">
+        <div class="flex-1 flex flex-col min-w-max">
+            <!-- Hàng tiêu đề Ngày -->
+            <div class="calendar-grid border-b-2 border-slate-300 dark:border-neutral-800 bg-slate-50 dark:bg-black sticky top-0 z-10" id="calendarHeader">
+                <!-- Nội dung được tạo bởi JS -->
+            </div>
+            
+            <!-- Nội dung lưới (Thành viên & Sự kiện) -->
+            <div class="flex-1" id="calendarBody">
+                <!-- Nội dung được tạo bởi JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form (Thêm/Sửa Lịch) -->
+    <div id="eventModal" class="fixed inset-0 bg-black bg-opacity-40 dark:bg-opacity-80 hidden items-center justify-center z-50 backdrop-blur-sm transition-opacity">
+        <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-2xl w-[420px] overflow-hidden border dark:border-neutral-800">
+            <div class="bg-blue-600 dark:bg-blue-900 border-b dark:border-neutral-800 text-white px-5 py-3 flex justify-between items-center">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="fas fa-calendar-check"></i> <span id="modalTitle">PC利用登録</span>
+                </h3>
+                <button onclick="closeModal()" class="text-blue-200 hover:text-white transition-colors">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <input type="hidden" id="eventId">
+                <input type="hidden" id="eventMemberId">
+                <div>
+                    <label class="block text-slate-700 dark:text-neutral-300 font-semibold mb-1 text-base uppercase tracking-wide">実施日</label>
+                    <input type="date" id="eventDate" class="w-full border border-slate-300 dark:border-neutral-700 rounded-md p-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50 dark:bg-neutral-800 dark:text-white">
+                </div>
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="block text-slate-700 dark:text-neutral-300 font-semibold mb-1 text-base uppercase tracking-wide">開始時間</label>
+                        <div class="flex items-center gap-1">
+                            <select id="startHour" class="w-full border border-slate-300 dark:border-neutral-700 rounded-md p-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"></select>
+                            <span class="font-bold text-slate-500 dark:text-neutral-400">:</span>
+                            <select id="startMinute" class="w-full border border-slate-300 dark:border-neutral-700 rounded-md p-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"></select>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-slate-700 dark:text-neutral-300 font-semibold mb-1 text-base uppercase tracking-wide">終了時間</label>
+                        <div class="flex items-center gap-1">
+                            <select id="endHour" class="w-full border border-slate-300 dark:border-neutral-700 rounded-md p-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"></select>
+                            <span class="font-bold text-slate-500 dark:text-neutral-400">:</span>
+                            <select id="endMinute" class="w-full border border-slate-300 dark:border-neutral-700 rounded-md p-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-neutral-800 dark:text-white cursor-pointer"></select>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-slate-700 dark:text-neutral-300 font-semibold mb-1 text-base uppercase tracking-wide">作業説明 / プロジェクト名</label>
+                    <textarea id="eventDesc" rows="3" class="w-full border border-slate-300 dark:border-neutral-700 rounded-md p-2.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-neutral-800 dark:text-white" placeholder="例: ドライブアセンブリの設計... (任意)"></textarea>
+                </div>
+                <div>
+                    <label class="block text-slate-700 dark:text-neutral-300 font-semibold mb-1 text-base uppercase tracking-wide">カラー (予定)</label>
+                    <div class="flex gap-3 mt-1 flex-wrap" id="colorPicker">
+                        <button type="button" data-color="green" class="color-btn w-8 h-8 rounded-full bg-green-500 hover:scale-110 transition-transform ring-2 ring-offset-2 ring-slate-800 dark:ring-slate-200 dark:ring-offset-neutral-900"></button>
+                        <button type="button" data-color="blue" class="color-btn w-8 h-8 rounded-full bg-blue-500 hover:scale-110 transition-transform"></button>
+                        <button type="button" data-color="purple" class="color-btn w-8 h-8 rounded-full bg-purple-500 hover:scale-110 transition-transform"></button>
+                        <button type="button" data-color="orange" class="color-btn w-8 h-8 rounded-full bg-orange-500 hover:scale-110 transition-transform"></button>
+                        <button type="button" data-color="pink" class="color-btn w-8 h-8 rounded-full bg-pink-500 hover:scale-110 transition-transform"></button>
+                        <button type="button" data-color="red" class="color-btn w-8 h-8 rounded-full bg-red-500 hover:scale-110 transition-transform"></button>
+                        <button type="button" data-color="yellow" class="color-btn w-8 h-8 rounded-full bg-yellow-400 hover:scale-110 transition-transform"></button>
+                        <button type="button" data-color="teal" class="color-btn w-8 h-8 rounded-full bg-teal-500 hover:scale-110 transition-transform"></button>
+                        <button type="button" data-color="indigo" class="color-btn w-8 h-8 rounded-full bg-indigo-500 hover:scale-110 transition-transform"></button>
+                        <button type="button" data-color="gray" class="color-btn w-8 h-8 rounded-full bg-slate-500 hover:scale-110 transition-transform"></button>
+                    </div>
+                    <input type="hidden" id="eventColor" value="green">
+                </div>
+            </div>
+            <div class="bg-slate-50 dark:bg-black px-5 py-3 border-t border-slate-200 dark:border-neutral-800 flex justify-end gap-2 items-center">
+                <button id="btnDeleteEvent" onclick="deleteEvent()" class="hidden px-4 py-2 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 font-medium rounded-md hover:bg-red-200 dark:hover:bg-red-900/60 text-base mr-auto transition-colors">予定を削除</button>
+                <button onclick="closeModal()" class="px-4 py-2 border border-slate-300 dark:border-neutral-700 rounded-md font-medium text-slate-700 dark:text-neutral-300 hover:bg-white dark:hover:bg-neutral-800 text-base transition-colors">キャンセル</button>
+                <button id="btnSaveEvent" onclick="saveEvent()" class="px-5 py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 text-base shadow-sm transition-colors">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal (Chọn người dùng) -->
+    <div id="authModal" class="fixed inset-0 bg-slate-900 bg-opacity-80 hidden items-center justify-center z-[70] backdrop-blur-sm">
+        <div class="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl w-[380px] overflow-hidden border dark:border-neutral-800 transform scale-100">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-900 dark:to-blue-800 text-white px-6 py-5 text-center">
+                <div class="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-user-lock text-3xl text-white"></i>
+                </div>
+                <h3 class="font-bold text-xl mb-1">ユーザー選択</h3>
+                <p class="text-blue-100 text-sm">カレンダーを利用するメンバーを選んでください</p>
+            </div>
+            <div class="p-6 space-y-3" id="authUserList">
+                <!-- Danh sách user sẽ được render bằng JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert/Confirm Modal -->
+    <div id="msgModal" class="fixed inset-0 bg-black bg-opacity-40 dark:bg-opacity-80 hidden items-center justify-center z-[60]">
+        <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-2xl w-80 overflow-hidden transform scale-100 transition-transform border dark:border-neutral-800">
+            <div id="msgHeader" class="text-white px-4 py-3 font-bold flex items-center gap-2 border-b dark:border-neutral-800 text-lg">
+                <i id="msgIcon" class="fas fa-info-circle"></i> <span id="msgTitle">お知らせ</span>
+            </div>
+            <div class="p-5 text-base text-slate-700 dark:text-neutral-200 leading-relaxed" id="msgContent">
+                メッセージ内容
+            </div>
+            <div class="bg-slate-50 dark:bg-black px-4 py-3 border-t border-slate-200 dark:border-neutral-800 flex justify-end gap-2" id="msgActions">
+                <button id="btnMsgCancel" class="px-4 py-1.5 border border-slate-300 dark:border-neutral-700 rounded-md hover:bg-white dark:hover:bg-neutral-800 text-slate-700 dark:text-neutral-300 font-medium text-base hidden">キャンセル</button>
+                <button id="btnMsgOk" class="px-5 py-1.5 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 text-base shadow-sm">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CẤU TRÚC DỮ LIỆU ---
+        // Giả lập 4 thành viên trong nhóm CAD
+        let defaultState = {
+            members: [
+                { id: 'u1', name: '小峠' },
+                { id: 'u2', name: '佐藤' },
+                { id: 'u3', name: 'ヤイン' },
+                { id: 'u4', name: '栃木' }
+            ],
+            events: []
+        };
+        
+        let state = JSON.parse(JSON.stringify(defaultState));
+        let currentDate = new Date(); // Mặc định mở ở tuần hiện tại
+        let dbFileHandle = null; // Biến lưu vết vị trí file DB để tự động ghi đè
+        let draggedEventId = null; // Biến lưu ID của sự kiện đang được kéo
+        let currentView = 'week'; // Biến lưu trạng thái xem hiện tại (week/day)
+        let currentUserId = null; // ID của người dùng đang đăng nhập trên trình duyệt
+
+        // Khởi tạo
+        function init() {
+            // Tự động tải dữ liệu lưu tạm từ trình duyệt (nếu có)
+            const localData = localStorage.getItem('sw_calendar_temp_db');
+            if (localData) {
+                try {
+                    state = JSON.parse(localData);
+                } catch(e) {}
+            }
+
+            setupColorPicker();
+            generateTimeOptions();
+            checkUserAuth(); // Kiểm tra danh tính thay vì renderCalendar trực tiếp
+            // Cập nhật lại lịch mỗi 1 phút để thay đổi màu trạng thái block theo thời gian thực
+            setInterval(renderCalendar, 60000);
+        }
+
+        // --- XỬ LÝ ĐỊNH DANH (AUTHORIZATION) ---
+        function checkUserAuth() {
+            const savedUser = localStorage.getItem('sw_current_user');
+            if (savedUser && state.members.find(m => m.id === savedUser)) {
+                currentUserId = savedUser;
+                updateHeaderUser();
+                renderCalendar();
+            } else {
+                showAuthModal();
+            }
+        }
+
+        function showAuthModal() {
+            const modal = document.getElementById('authModal');
+            const listContainer = document.getElementById('authUserList');
+            listContainer.innerHTML = '';
+            
+            state.members.forEach(member => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left px-5 py-3 rounded-lg border-2 border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 hover:bg-blue-50 hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:border-blue-500 transition-all font-bold text-lg text-slate-700 dark:text-neutral-200 flex items-center justify-between group';
+                btn.innerHTML = `
+                    <span>${member.name}</span>
+                    <i class="fas fa-chevron-right text-slate-300 group-hover:text-blue-500 transition-colors"></i>
+                `;
+                btn.onclick = () => selectUser(member.id);
+                listContainer.appendChild(btn);
+            });
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function selectUser(userId) {
+            currentUserId = userId;
+            localStorage.setItem('sw_current_user', userId);
+            
+            document.getElementById('authModal').classList.add('hidden');
+            document.getElementById('authModal').classList.remove('flex');
+            
+            updateHeaderUser();
+            renderCalendar();
+            showDialog('ログイン成功', `「${state.members.find(m => m.id === userId).name}」としてログインしました。自分のスケジュールのみ編集可能です。`, false);
+        }
+
+        function switchUser() {
+            currentUserId = null;
+            localStorage.removeItem('sw_current_user');
+            document.getElementById('currentUserDisplay').classList.add('hidden');
+            document.getElementById('currentUserDisplay').classList.remove('flex');
+            
+            // Xóa lưới lịch để ép chọn người dùng mới thấy lịch
+            document.getElementById('calendarBody').innerHTML = '';
+            showAuthModal();
+        }
+
+        function updateHeaderUser() {
+            if (currentUserId) {
+                const userName = state.members.find(m => m.id === currentUserId)?.name;
+                document.getElementById('currentUserName').innerText = userName;
+                document.getElementById('currentUserDisplay').classList.remove('hidden');
+                document.getElementById('currentUserDisplay').classList.add('flex');
+            }
+        }
+
+        // Cài đặt Color Picker
+        function setupColorPicker() {
+            const buttons = document.querySelectorAll('.color-btn');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    buttons.forEach(b => b.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-800', 'dark:ring-slate-200', 'dark:ring-offset-neutral-900'));
+                    btn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-800', 'dark:ring-slate-200', 'dark:ring-offset-neutral-900');
+                    document.getElementById('eventColor').value = btn.getAttribute('data-color');
+                });
+            });
+        }
+
+        // Lấy class màu cho khối Dự kiến
+        function getPlannedColorClasses(colorStr) {
+            const c = colorStr || 'green';
+            switch(c) {
+                case 'blue': return 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-400';
+                case 'purple': return 'bg-purple-50 dark:bg-purple-900/30 border-purple-500 text-purple-700 dark:text-purple-400';
+                case 'orange': return 'bg-orange-50 dark:bg-orange-900/30 border-orange-500 text-orange-700 dark:text-orange-400';
+                case 'pink': return 'bg-pink-50 dark:bg-pink-900/30 border-pink-500 text-pink-700 dark:text-pink-400';
+                case 'red': return 'bg-red-50 dark:bg-red-900/30 border-red-500 text-red-700 dark:text-red-400';
+                case 'yellow': return 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-500 text-yellow-700 dark:text-yellow-400';
+                case 'teal': return 'bg-teal-50 dark:bg-teal-900/30 border-teal-500 text-teal-700 dark:text-teal-400';
+                case 'indigo': return 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-500 text-indigo-700 dark:text-indigo-400';
+                case 'gray': return 'bg-slate-50 dark:bg-slate-800 border-slate-500 text-slate-700 dark:text-slate-400';
+                case 'green':
+                default:
+                    return 'bg-green-50 dark:bg-green-900/30 border-green-500 text-green-700 dark:text-green-400';
+            }
+        }
+
+        // Tạo danh sách giờ (24h) và phút (bước nhảy 5p)
+        function generateTimeOptions() {
+            const startHour = document.getElementById('startHour');
+            const endHour = document.getElementById('endHour');
+            const startMinute = document.getElementById('startMinute');
+            const endMinute = document.getElementById('endMinute');
+
+            for (let i = 0; i < 24; i++) {
+                const hour = String(i).padStart(2, '0');
+                startHour.add(new Option(hour, hour));
+                endHour.add(new Option(hour, hour));
+            }
+
+            for (let i = 0; i < 60; i += 5) {
+                const minute = String(i).padStart(2, '0');
+                startMinute.add(new Option(minute, minute));
+                endMinute.add(new Option(minute, minute));
+            }
+        }
+
+        // --- XỬ LÝ NGÀY THÁNG ---
+        function getStartOfWeek(date) {
+            const d = new Date(date);
+            const day = d.getDay();
+            // Điều chỉnh về ngày thứ 2 (tuần bắt đầu từ thứ 2)
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            return new Date(d.setDate(diff));
+        }
+
+        function navigateTime(offset) {
+            if (currentView === 'week') {
+                currentDate.setDate(currentDate.getDate() + (offset * 7));
+            } else {
+                currentDate.setDate(currentDate.getDate() + offset);
+            }
+            renderCalendar();
+        }
+
+        function goToToday() {
+            currentDate = new Date();
+            renderCalendar();
+        }
+
+        function jumpToDate(dateString) {
+            if (!dateString) return;
+            currentDate = new Date(dateString);
+            renderCalendar();
+        }
+
+        function formatDate(date) {
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`; // YYYY-MM-DD
+        }
+
+        function setView(view) {
+            currentView = view;
+            const btnDay = document.getElementById('btnViewDay');
+            const btnWeek = document.getElementById('btnViewWeek');
+            
+            if (view === 'day') {
+                btnDay.classList.add('bg-white', 'dark:bg-neutral-800', 'text-slate-700', 'dark:text-neutral-200', 'shadow-sm');
+                btnDay.classList.remove('text-slate-500', 'dark:text-neutral-400', 'bg-transparent');
+                btnWeek.classList.remove('bg-white', 'dark:bg-neutral-800', 'text-slate-700', 'dark:text-neutral-200', 'shadow-sm');
+                btnWeek.classList.add('text-slate-500', 'dark:text-neutral-400', 'bg-transparent');
+            } else {
+                btnWeek.classList.add('bg-white', 'dark:bg-neutral-800', 'text-slate-700', 'dark:text-neutral-200', 'shadow-sm');
+                btnWeek.classList.remove('text-slate-500', 'dark:text-neutral-400', 'bg-transparent');
+                btnDay.classList.remove('bg-white', 'dark:bg-neutral-800', 'text-slate-700', 'dark:text-neutral-200', 'shadow-sm');
+                btnDay.classList.add('text-slate-500', 'dark:text-neutral-400', 'bg-transparent');
+            }
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            if (currentView === 'week') {
+                renderWeekView();
+            } else {
+                renderDayView();
+            }
+        }
+
+        // --- RENDER GIAO DIỆN LỊCH (THEO NGÀY - 7:00 đến 19:00) ---
+        function renderDayView() {
+            const dStr = formatDate(currentDate);
+            document.getElementById('dateRangeText').innerHTML = `
+                ${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月${currentDate.getDate()}日
+            `;
+            document.getElementById('weekPicker').value = dStr;
+
+            // Header (Timeline 7:00 - 19:00)
+            const headerContainer = document.getElementById('calendarHeader');
+            headerContainer.className = 'flex border-b-2 border-slate-300 dark:border-neutral-800 bg-slate-50 dark:bg-black sticky top-0 z-10';
+            
+            let headerHtml = `
+                <div class="w-[220px] p-3 border-r border-slate-300 dark:border-neutral-800 flex items-center justify-center bg-slate-100 dark:bg-neutral-900 shrink-0">
+                    <span class="text-slate-500 dark:text-neutral-400 font-bold uppercase tracking-wider text-base"><i class="fas fa-users mr-1"></i> メンバー</span>
+                </div>
+                <div class="flex-1 flex relative">
+            `;
+            
+            for (let h = 7; h <= 18; h++) {
+                headerHtml += `<div class="flex-1 border-r border-slate-300 dark:border-neutral-800 text-center py-2 text-slate-500 dark:text-neutral-400 text-base font-semibold">${h}:00</div>`;
+            }
+            headerHtml += `</div>`;
+            headerContainer.innerHTML = headerHtml;
+
+            // Body
+            const bodyContainer = document.getElementById('calendarBody');
+            bodyContainer.innerHTML = '';
+            
+            const now = new Date();
+            const todayStr = formatDate(now);
+            const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+            const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+            const dayStartMin = 7 * 60;
+            const dayEndMin = 19 * 60;
+            const totalMins = dayEndMin - dayStartMin;
+
+            state.members.forEach(member => {
+                const isCurrentUser = member.id === currentUserId;
+                const rowClass = isCurrentUser ? 'bg-blue-50/30 dark:bg-blue-900/10' : '';
+
+                const row = document.createElement('div');
+                row.className = `flex border-b border-slate-200 dark:border-neutral-800 group/row min-h-[80px] ${rowClass}`;
+                
+                row.innerHTML = `
+                    <div class="w-[220px] p-4 border-r border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col justify-center sticky left-0 z-10 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#262626] shrink-0">
+                        <div class="font-bold text-slate-800 dark:text-neutral-200 text-xl mb-1 flex items-center justify-between">
+                            ${member.name}
+                            ${isCurrentUser ? '<i class="fas fa-user-check text-blue-500 text-sm" title="あなた"></i>' : ''}
+                        </div>
+                    </div>
+                `;
+                
+                const timelineCell = document.createElement('div');
+                timelineCell.className = `flex-1 relative bg-white/50 dark:bg-neutral-900/50 group/cell overflow-hidden ${isCurrentUser ? 'hover:bg-blue-100/30 dark:hover:bg-blue-900/20 cursor-pointer' : ''}`;
+                
+                // Kẻ nền mờ chia cột
+                const bgGrid = document.createElement('div');
+                bgGrid.className = 'absolute inset-0 flex pointer-events-none';
+                for (let i = 0; i < 12; i++) {
+                    bgGrid.innerHTML += `<div class="flex-1 border-r border-slate-100 dark:border-neutral-800/50"></div>`;
+                }
+                timelineCell.appendChild(bgGrid);
+
+                // Đường chỉ thị giờ hiện tại
+                if (dStr === todayStr && currentTotalMinutes >= dayStartMin && currentTotalMinutes <= dayEndMin) {
+                    const nowPercent = ((currentTotalMinutes - dayStartMin) / totalMins) * 100;
+                    const line = document.createElement('div');
+                    line.className = 'absolute top-0 bottom-0 border-l-2 border-red-500 z-20 pointer-events-none shadow-[0_0_4px_rgba(239,68,68,0.5)]';
+                    line.style.left = `${nowPercent}%`;
+                    timelineCell.appendChild(line);
+                }
+
+                // Xử lý kéo thả cho dải timeline ngang (Chỉ cho phép trên hàng của mình)
+                if (isCurrentUser) {
+                    timelineCell.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+                    timelineCell.ondragenter = (e) => { e.preventDefault(); timelineCell.classList.add('bg-blue-200/40', 'dark:bg-blue-800/30'); };
+                    timelineCell.ondragleave = (e) => { timelineCell.classList.remove('bg-blue-200/40', 'dark:bg-blue-800/30'); };
+                    timelineCell.ondrop = (e) => {
+                        e.preventDefault();
+                        timelineCell.classList.remove('bg-blue-200/40', 'dark:bg-blue-800/30');
+                        if (draggedEventId) handleDrop(draggedEventId, member.id, dStr);
+                    };
+                    
+                    timelineCell.onclick = (e) => {
+                        if (e.target === timelineCell || e.target.parentElement === bgGrid) {
+                            openModal(null, member.id, dStr);
+                        }
+                    };
+                }
+
+                const dayEvents = state.events.filter(e => e.memberId === member.id && e.date === dStr);
+                
+                dayEvents.forEach(evt => {
+                    const [sH, sM] = evt.startTime.split(':').map(Number);
+                    const [eH, eM] = evt.endTime.split(':').map(Number);
+                    const startMins = sH * 60 + sM;
+                    const endMins = eH * 60 + eM;
+                    
+                    // Ẩn nếu nằm ngoài khung giờ 7:00 - 19:00
+                    if (endMins <= dayStartMin || startMins >= dayEndMin) return;
+                    
+                    const drawStartMins = Math.max(startMins, dayStartMin);
+                    const drawEndMins = Math.min(endMins, dayEndMin);
+                    
+                    // Tính toạn độ (Left) và Chiều dài (Width)
+                    const leftPercent = ((drawStartMins - dayStartMin) / totalMins) * 100;
+                    const widthPercent = ((drawEndMins - drawStartMins) / totalMins) * 100;
+
+                    const evtDiv = document.createElement('div');
+                    
+                    let statusIcon = ''; let statusText = ''; let blockClass = '';
+                    if (evt.date < todayStr || (evt.date === todayStr && evt.endTime <= currentTimeStr)) {
+                        statusIcon = '<i class="fas fa-check-circle"></i>'; statusText = '完了';
+                        blockClass = 'bg-slate-100 dark:bg-neutral-800 border border-slate-400 dark:border-neutral-600 border-l-4 text-slate-500 dark:text-neutral-400 opacity-75';
+                    } else if (evt.date === todayStr && evt.startTime <= currentTimeStr && evt.endTime > currentTimeStr) {
+                        statusIcon = '<i class="fas fa-spinner fa-spin"></i>'; statusText = '作業中';
+                        blockClass = 'bg-red-50 dark:bg-red-900/30 border border-red-500 border-l-4 text-red-700 dark:text-red-400 shadow-sm z-10';
+                    } else {
+                        statusIcon = '<i class="far fa-clock"></i>'; statusText = '予定';
+                        blockClass = `border border-l-4 shadow-sm ${getPlannedColorClasses(evt.color)}`;
+                    }
+
+                    evtDiv.className = `event-block absolute top-2 bottom-2 rounded cursor-pointer flex flex-col p-1.5 overflow-hidden hover:z-30 ${blockClass}`;
+                    evtDiv.style.left = `${leftPercent}%`;
+                    evtDiv.style.width = `calc(${widthPercent}% - 2px)`; // Trừ viền để không sát mép
+                    
+                    evtDiv.title = `ステータス: ${statusText}\n内容: ${evt.description || '説明なし'}\n時間: ${evt.startTime} - ${evt.endTime}`;
+                    
+                    if (isCurrentUser) {
+                        evtDiv.draggable = true;
+                        evtDiv.ondragstart = (e) => {
+                            draggedEventId = evt.id;
+                            e.dataTransfer.effectAllowed = 'move';
+                            setTimeout(() => evtDiv.classList.add('opacity-40'), 0);
+                        };
+                        evtDiv.ondragend = (e) => {
+                            evtDiv.classList.remove('opacity-40');
+                            draggedEventId = null;
+                        };
+                        evtDiv.classList.add('hover:ring-2', 'hover:ring-blue-400');
+                    } else {
+                        evtDiv.draggable = false;
+                        evtDiv.classList.add('opacity-90');
+                    }
+
+                    evtDiv.innerHTML = `
+                        <div class="font-bold text-base mb-0.5 flex items-center gap-1 pointer-events-none whitespace-nowrap">
+                            <span>${statusIcon}</span>
+                            <span class="truncate">${evt.startTime}-${evt.endTime}</span>
+                        </div>
+                        <div class="text-base truncate leading-tight ${evt.date < todayStr || (evt.date === todayStr && evt.endTime <= currentTimeStr) ? 'text-slate-500 dark:text-neutral-400' : 'text-slate-800 dark:text-neutral-200'} pointer-events-none">${evt.description || ''}</div>
+                    `;
+                    
+                    evtDiv.onclick = (e) => { e.stopPropagation(); openModal(evt, member.id, dStr); };
+                    timelineCell.appendChild(evtDiv);
+                });
+                
+                row.appendChild(timelineCell);
+                bodyContainer.appendChild(row);
+            });
+        }
+
+        // --- RENDER GIAO DIỆN LỊCH (THEO TUẦN) ---
+        function renderWeekView() {
+            const startOfWeek = getStartOfWeek(currentDate);
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(endOfWeek.getDate() + 6);
+
+            // Cập nhật khoảng hiển thị thời gian
+            document.getElementById('dateRangeText').innerHTML = `
+                ${startOfWeek.getFullYear()}年${startOfWeek.getMonth() + 1}月${startOfWeek.getDate()}日
+                <span class="text-slate-400 font-normal mx-1">-</span> 
+                ${endOfWeek.getFullYear()}年${endOfWeek.getMonth() + 1}月${endOfWeek.getDate()}日
+            `;
+            
+            // Đồng bộ ngày vào input date ẩn
+            document.getElementById('weekPicker').value = formatDate(startOfWeek);
+
+            // Vẽ Header (Thứ ngày)
+            const headerContainer = document.getElementById('calendarHeader');
+            headerContainer.className = 'calendar-grid border-b-2 border-slate-300 dark:border-neutral-800 bg-slate-50 dark:bg-black sticky top-0 z-10';
+            headerContainer.innerHTML = `
+                <div class="p-3 border-r border-slate-300 dark:border-neutral-800 flex items-center justify-center bg-slate-100 dark:bg-neutral-900">
+                    <span class="text-slate-500 dark:text-neutral-400 font-bold uppercase tracking-wider text-base"><i class="fas fa-users mr-1"></i> メンバー</span>
+                </div>
+            `;
+            
+            const daysOfWeek = ['月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '日曜日'];
+            const weekDates = [];
+            const todayStr = formatDate(new Date());
+            
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(startOfWeek);
+                d.setDate(d.getDate() + i);
+                const dStr = formatDate(d);
+                weekDates.push(dStr);
+                
+                const isToday = dStr === todayStr;
+                const isWeekend = i >= 5;
+                
+                let bgClass = 'bg-slate-50 dark:bg-black';
+                let textClass = 'text-slate-700 dark:text-neutral-300';
+                let subTextClass = 'text-slate-500 dark:text-neutral-400';
+                
+                if (isToday) {
+                    bgClass = 'bg-blue-100 dark:bg-blue-900/30 border-b-4 border-blue-500 dark:border-blue-500';
+                    textClass = 'text-blue-700 dark:text-blue-400 font-bold';
+                    subTextClass = 'text-blue-600 dark:text-blue-500';
+                } else if (isWeekend) {
+                    bgClass = 'bg-orange-50/50 dark:bg-orange-900/10';
+                    textClass = 'text-orange-600 dark:text-orange-500';
+                }
+
+                headerContainer.innerHTML += `
+                    <div class="p-3 border-r border-slate-300 dark:border-neutral-800 text-center flex flex-col justify-center ${bgClass}">
+                        <span class="font-semibold text-base ${textClass}">${daysOfWeek[i]}</span>
+                        <span class="text-base mt-1 ${subTextClass}">${d.getMonth()+1}/${d.getDate()}</span>
+                    </div>
+                `;
+            }
+
+            // Vẽ Body (Hàng Thành viên và Ô Sự kiện)
+            const bodyContainer = document.getElementById('calendarBody');
+            bodyContainer.innerHTML = '';
+
+            state.members.forEach(member => {
+                const isCurrentUser = member.id === currentUserId;
+                const rowClass = isCurrentUser ? 'bg-blue-50/10 dark:bg-blue-900/5' : '';
+
+                const row = document.createElement('div');
+                row.className = `calendar-grid border-b border-slate-200 dark:border-neutral-800 group/row ${rowClass}`;
+                
+                // Ô tên thành viên
+                row.innerHTML = `
+                    <div class="p-4 border-r border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col justify-center sticky left-0 z-10 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#262626]">
+                        <div class="font-bold text-slate-800 dark:text-neutral-200 text-xl mb-1 flex items-center justify-between">
+                            ${member.name}
+                            ${isCurrentUser ? '<i class="fas fa-user-check text-blue-500 text-sm" title="あなた"></i>' : ''}
+                        </div>
+                    </div>
+                `;
+
+                // Ô theo từng ngày
+                weekDates.forEach((dateStr, index) => {
+                    const isWeekend = index >= 5;
+                    const isToday = dateStr === todayStr;
+                    let cellBg = isWeekend ? 'bg-orange-50/20 dark:bg-orange-900/5' : 'bg-white dark:bg-neutral-900';
+                    if(isToday) cellBg = 'bg-blue-50/30 dark:bg-blue-900/10';
+
+                    const cell = document.createElement('div');
+                    cell.className = `p-1.5 border-r border-slate-200 dark:border-neutral-800 ${cellBg} min-h-[120px] relative group/cell transition-colors flex flex-col gap-1.5 ${isCurrentUser ? 'hover:bg-blue-50/60 dark:hover:bg-neutral-800/70 cursor-pointer' : ''}`;
+                    
+                    // --- SỰ KIỆN KÉO THẢ CHO Ô LỊCH (DROP ZONE) CHỈ CHO CURRENT USER ---
+                    if (isCurrentUser) {
+                        cell.ondragover = (e) => {
+                            e.preventDefault(); // Cần thiết để cho phép Drop
+                            e.dataTransfer.dropEffect = 'move';
+                        };
+                        cell.ondragenter = (e) => {
+                            e.preventDefault();
+                            cell.classList.add('ring-2', 'ring-blue-400', 'ring-inset', 'bg-blue-100/50', 'dark:bg-blue-900/30'); // Hiệu ứng khi kéo vào
+                        };
+                        cell.ondragleave = (e) => {
+                            if (!e.relatedTarget || !cell.contains(e.relatedTarget)) {
+                                cell.classList.remove('ring-2', 'ring-blue-400', 'ring-inset', 'bg-blue-100/50', 'dark:bg-blue-900/30');
+                            }
+                        };
+                        cell.ondrop = (e) => {
+                            e.preventDefault();
+                            cell.classList.remove('ring-2', 'ring-blue-400', 'ring-inset', 'bg-blue-100/50', 'dark:bg-blue-900/30');
+                            if (draggedEventId) {
+                                handleDrop(draggedEventId, member.id, dateStr);
+                            }
+                        };
+
+                        // Bấm vào vùng trống để thêm sự kiện
+                        cell.onclick = (e) => {
+                            if(e.target === cell || e.target.parentElement === cell) {
+                                openModal(null, member.id, dateStr);
+                            }
+                        };
+                    }
+
+                    // Lọc và render sự kiện của thành viên trong ngày này
+                    const dayEvents = state.events.filter(e => e.memberId === member.id && e.date === dateStr);
+                    // Sắp xếp theo giờ bắt đầu
+                    dayEvents.sort((a,b) => a.startTime.localeCompare(b.startTime));
+
+                    dayEvents.forEach(evt => {
+                        const evtDiv = document.createElement('div');
+                        
+                        // Xác định trạng thái theo thời gian thực
+                        const now = new Date();
+                        const todayStr = formatDate(now);
+                        const currentHours = String(now.getHours()).padStart(2, '0');
+                        const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+                        const currentTimeStr = `${currentHours}:${currentMinutes}`;
+                        
+                        let statusIcon = '';
+                        let statusText = '';
+                        let blockClass = '';
+                        
+                        if (evt.date < todayStr || (evt.date === todayStr && evt.endTime <= currentTimeStr)) {
+                            // Đã xong / Đã qua
+                            statusIcon = '<i class="fas fa-check-circle"></i>';
+                            statusText = '完了';
+                            blockClass = 'bg-slate-100 dark:bg-neutral-800 border-l-4 border-slate-400 dark:border-neutral-600 text-slate-500 dark:text-neutral-400 opacity-75';
+                        } else if (evt.date === todayStr && evt.startTime <= currentTimeStr && evt.endTime > currentTimeStr) {
+                            // Đang thực hiện
+                            statusIcon = '<i class="fas fa-spinner fa-spin"></i>';
+                            statusText = '作業中';
+                            blockClass = 'bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-400 shadow-sm';
+                        } else {
+                            // Dự kiến (Tương lai)
+                            statusIcon = '<i class="far fa-clock"></i>';
+                            statusText = '予定';
+                            blockClass = `border-l-4 ${getPlannedColorClasses(evt.color)}`;
+                        }
+
+                        evtDiv.className = `event-block p-2 rounded-md cursor-pointer flex flex-col ${blockClass}`;
+                        evtDiv.title = `ステータス: ${statusText}\n内容: ${evt.description || '説明なし'}\n時間: ${evt.startTime} - ${evt.endTime}`;
+                        
+                        // --- SỰ KIỆN KÉO THẢ CHO KHỐI CÔNG VIỆC ---
+                        if (isCurrentUser) {
+                            evtDiv.draggable = true;
+                            evtDiv.ondragstart = (e) => {
+                                draggedEventId = evt.id;
+                                e.dataTransfer.effectAllowed = 'move';
+                                setTimeout(() => evtDiv.classList.add('opacity-40', 'scale-95'), 0); // Làm mờ khối đang kéo
+                            };
+                            evtDiv.ondragend = (e) => {
+                                evtDiv.classList.remove('opacity-40', 'scale-95');
+                                draggedEventId = null;
+                            };
+                            evtDiv.classList.add('hover:ring-2', 'hover:ring-blue-400');
+                        } else {
+                            evtDiv.draggable = false;
+                        }
+
+                        evtDiv.innerHTML = `
+                            <div class="font-bold text-base mb-0.5 flex items-center justify-between pointer-events-none">
+                                <span>${evt.startTime} - ${evt.endTime}</span>
+                                <span title="${statusText}">${statusIcon}</span>
+                            </div>
+                            <div class="text-base line-clamp-2 leading-tight ${evt.date < todayStr || (evt.date === todayStr && evt.endTime <= currentTimeStr) ? 'text-slate-500 dark:text-neutral-400' : 'text-slate-800 dark:text-neutral-200'}">${evt.description ? evt.description : '<span class="italic opacity-60">(説明なし)</span>'}</div>
+                        `;
+                        
+                        // Click vào sự kiện để sửa
+                        evtDiv.onclick = (e) => {
+                            e.stopPropagation();
+                            openModal(evt, member.id, dateStr);
+                        };
+                        cell.appendChild(evtDiv);
+                    });
+
+                    // Nút [+] hiện lên khi hover (Chỉ hiện cho current user)
+                    if (isCurrentUser) {
+                        const addBtn = document.createElement('div');
+                        addBtn.innerHTML = '<i class="fas fa-plus"></i>';
+                        addBtn.className = 'absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded bg-blue-100 dark:bg-neutral-800 text-blue-600 dark:text-blue-400 opacity-0 group-hover/cell:opacity-100 transition-opacity hover:bg-blue-600 dark:hover:bg-blue-600 hover:text-white dark:hover:text-white shadow-sm';
+                        addBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            openModal(null, member.id, dateStr);
+                        };
+                        cell.appendChild(addBtn);
+                    }
+
+                    row.appendChild(cell);
+                });
+
+                bodyContainer.appendChild(row);
+            });
+        }
+
+        // --- XỬ LÝ KÉO THẢ (DRAG & DROP) ---
+        function handleDrop(eventId, newMemberId, newDateStr) {
+            const evt = state.events.find(e => e.id === eventId);
+            if (!evt) return;
+
+            // Bỏ qua nếu kéo thả về đúng vị trí cũ
+            if (evt.memberId === newMemberId && evt.date === newDateStr) return;
+
+            // Kiểm tra xem vị trí mới có bị trùng lịch sử dụng SolidWorks không
+            const overlappingEvent = state.events.find(e => {
+                if (e.id === eventId) return false;
+                if (e.date !== newDateStr) return false;
+                
+                // Trùng khi thời gian giao nhau
+                return (evt.startTime < e.endTime) && (evt.endTime > e.startTime);
+            });
+
+            if (overlappingEvent) {
+                const conflictMember = state.members.find(m => m.id === overlappingEvent.memberId)?.name || '他のメンバー';
+                showDialog('スケジュールの重複', `移動先には既に "${conflictMember}" のスケジュール (${overlappingEvent.startTime} - ${overlappingEvent.endTime}) があり重複しています。移動できません。`, false);
+                return;
+            }
+
+            // Cập nhật lại ID thành viên và ngày cho sự kiện
+            evt.memberId = newMemberId;
+            evt.date = newDateStr;
+            renderCalendar();
+        }
+
+        // --- XỬ LÝ MODAL (FORM) ---
+        function openModal(eventData, memberId, dateStr) {
+            const isCurrentUser = memberId === currentUserId;
+            const modal = document.getElementById('eventModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            const isEdit = eventData !== null;
+            
+            // Xử lý tiêu đề Modal
+            if (!isCurrentUser) {
+                document.getElementById('modalTitle').innerHTML = '予定の詳細 <span class="text-sm bg-slate-500 text-white px-2 py-0.5 rounded ml-2">閲覧のみ</span>';
+            } else {
+                document.getElementById('modalTitle').innerText = isEdit ? '予定を編集' : '新規利用登録';
+            }
+            
+            document.getElementById('eventId').value = isEdit ? eventData.id : '';
+            document.getElementById('eventMemberId').value = memberId;
+            document.getElementById('eventDate').value = dateStr;
+            
+            // Set giờ mặc định cho mượt (và bóc tách ra dropdown)
+            const defaultStart = isEdit ? eventData.startTime : '08:00';
+            const defaultEnd = isEdit ? eventData.endTime : '17:00';
+            
+            document.getElementById('startHour').value = defaultStart.split(':')[0];
+            document.getElementById('startMinute').value = defaultStart.split(':')[1];
+            
+            document.getElementById('endHour').value = defaultEnd.split(':')[0];
+            document.getElementById('endMinute').value = defaultEnd.split(':')[1];
+            
+            document.getElementById('eventDesc').value = isEdit ? eventData.description : '';
+            
+            // Set Color UI
+            const color = isEdit ? (eventData.color || 'green') : 'green';
+            document.getElementById('eventColor').value = color;
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                if(btn.getAttribute('data-color') === color) {
+                    btn.classList.add('ring-2', 'ring-offset-2', 'ring-slate-800', 'dark:ring-slate-200', 'dark:ring-offset-neutral-900');
+                } else {
+                    btn.classList.remove('ring-2', 'ring-offset-2', 'ring-slate-800', 'dark:ring-slate-200', 'dark:ring-offset-neutral-900');
+                }
+            });
+
+            // Khóa Input nếu không phải Current User
+            const inputIds = ['eventDate', 'startHour', 'startMinute', 'endHour', 'endMinute', 'eventDesc'];
+            inputIds.forEach(id => {
+                const el = document.getElementById(id);
+                el.disabled = !isCurrentUser;
+                if (!isCurrentUser) {
+                    el.classList.add('opacity-70', 'cursor-not-allowed');
+                } else {
+                    el.classList.remove('opacity-70', 'cursor-not-allowed');
+                }
+            });
+
+            // Khóa Color Picker
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.disabled = !isCurrentUser;
+                if (!isCurrentUser) {
+                    btn.classList.add('cursor-not-allowed', 'opacity-70');
+                } else {
+                    btn.classList.remove('cursor-not-allowed', 'opacity-70');
+                }
+            });
+
+            const btnDelete = document.getElementById('btnDeleteEvent');
+            const btnSave = document.getElementById('btnSaveEvent');
+            
+            // Ẩn/Hiện nút Lưu, Xóa theo quyền
+            if (!isCurrentUser) {
+                btnSave.classList.add('hidden');
+                btnDelete.classList.add('hidden');
+            } else {
+                btnSave.classList.remove('hidden');
+                if(isEdit) {
+                    btnDelete.classList.remove('hidden');
+                } else {
+                    btnDelete.classList.add('hidden');
+                }
+            }
+            
+            // Focus vào ô mô tả nếu có quyền sửa
+            if (isCurrentUser) {
+                setTimeout(() => document.getElementById('eventDesc').focus(), 100);
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('eventModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveEvent() {
+            const id = document.getElementById('eventId').value;
+            const memberId = document.getElementById('eventMemberId').value;
+            const date = document.getElementById('eventDate').value;
+            
+            // Bảo mật lớp 2 (Backing up the UI Lock)
+            if (memberId !== currentUserId) {
+                showDialog('エラー', '他のメンバーの予定は保存できません。', false);
+                return;
+            }
+
+            const startHour = document.getElementById('startHour').value;
+            const startMinute = document.getElementById('startMinute').value;
+            const endHour = document.getElementById('endHour').value;
+            const endMinute = document.getElementById('endMinute').value;
+            
+            const startTime = `${startHour}:${startMinute}`;
+            const endTime = `${endHour}:${endMinute}`;
+            
+            const description = document.getElementById('eventDesc').value.trim();
+            const color = document.getElementById('eventColor').value; // Retrieve color
+
+            if(startTime >= endTime) {
+                showDialog('時間エラー', '終了時間は開始時間より後にしてください。', false);
+                return;
+            }
+
+            // Kiểm tra trùng lặp lịch giữa tất cả các thành viên (Overlapping Schedule)
+            const overlappingEvent = state.events.find(e => {
+                if (id && e.id === id) return false; // Bỏ qua chính nó khi đang sửa
+                if (e.date !== date) return false; // Chỉ xét trong cùng 1 ngày
+                
+                // Lịch bị trùng khi: (Bắt đầu A < Kết thúc B) VÀ (Kết thúc A > Bắt đầu B)
+                return (startTime < e.endTime) && (endTime > e.startTime);
+            });
+
+            if (overlappingEvent) {
+                const conflictMember = state.members.find(m => m.id === overlappingEvent.memberId)?.name || '他のメンバー';
+                showDialog('スケジュールの重複', `この時間は "${conflictMember}" のスケジュール (${overlappingEvent.startTime} - ${overlappingEvent.endTime}) と重複しています。別の時間を選択してください。`, false);
+                return;
+            }
+
+            if(id) {
+                // Sửa
+                const index = state.events.findIndex(e => e.id === id);
+                if(index > -1) {
+                    state.events[index] = { id, memberId, date, startTime, endTime, description, color };
+                }
+            } else {
+                // Thêm mới
+                const newId = 'evt_' + Date.now();
+                state.events.push({ id: newId, memberId, date, startTime, endTime, description, color });
+            }
+
+            closeModal();
+            renderCalendar();
+        }
+
+        function deleteEvent() {
+            const id = document.getElementById('eventId').value;
+            const memberId = document.getElementById('eventMemberId').value;
+
+            // Bảo mật lớp 2 (Backing up the UI Lock)
+            if (memberId !== currentUserId) {
+                showDialog('エラー', '他のメンバーの予定は削除できません。', false);
+                return;
+            }
+
+            if(id) {
+                showDialog('削除の確認', 'この予定を削除してもよろしいですか？', true, (confirmed) => {
+                    if(confirmed) {
+                        state.events = state.events.filter(e => e.id !== id);
+                        closeModal();
+                        renderCalendar();
+                    }
+                });
+            }
+        }
+
+        // --- XỬ LÝ LƯU & ĐỌC DATABASE (FILE TẠI LOCAL/SERVER SHARE) ---
+        async function saveDatabase() {
+            const dataStr = JSON.stringify(state, null, 2);
+            
+            // Hàm xử lý tải file truyền thống (Fallback)
+            const fallbackDownload = () => {
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `SOLIDWORKS_GROUP_DB.JSON`; 
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showDialog('注意', 'プレビュー環境のため、通常のファイルとしてダウンロードしました。', false);
+            };
+
+            try {
+                if (window.showSaveFilePicker) {
+                    try {
+                        if (!dbFileHandle) {
+                            dbFileHandle = await window.showSaveFilePicker({
+                                suggestedName: 'SOLIDWORKS_GROUP_DB.JSON',
+                                types: [{
+                                    description: 'JSON Database File',
+                                    accept: {'application/json': ['.json']},
+                                }],
+                            });
+                        }
+                        
+                        const writable = await dbFileHandle.createWritable();
+                        await writable.write(dataStr);
+                        await writable.close();
+                        showDialog('成功', 'DBに保存しました！', false);
+                    } catch (fsErr) {
+                        // Nếu bị chặn bởi Iframe (SecurityError), dùng fallback
+                        if (fsErr.name === 'SecurityError' || fsErr.message.includes('cross origin')) {
+                            console.warn('Iframe blocked File System API. Falling back to traditional download.');
+                            fallbackDownload();
+                        } else if (fsErr.name !== 'AbortError') {
+                            throw fsErr;
+                        }
+                    }
+                } else {
+                    fallbackDownload();
+                }
+            } catch (err) {
+                console.error('Lỗi khi lưu file:', err);
+                showDialog('エラー', 'ファイルの保存中にエラーが発生しました。再試行してください。', false);
+                dbFileHandle = null;
+            }
+        }
+
+        // Lưu tạm vào bộ nhớ của trình duyệt (Local Storage)
+        function saveToBrowser() {
+            localStorage.setItem('sw_calendar_temp_db', JSON.stringify(state));
+            showDialog('成功', 'ブラウザのメモリに一時保存しました。', false);
+        }
+
+        // Khôi phục từ bộ nhớ của trình duyệt
+        function loadFromBrowser() {
+            const data = localStorage.getItem('sw_calendar_temp_db');
+            if (data) {
+                try {
+                    state = JSON.parse(data);
+                    renderCalendar();
+                    showDialog('成功', '一時保存したデータを復元しました。', false);
+                } catch (e) {
+                    showDialog('エラー', 'データの復元に失敗しました。', false);
+                }
+            } else {
+                showDialog('お知らせ', '一時保存されたデータはありません。', false);
+            }
+        }
+
+        async function handleReadDB() {
+            try {
+                if (window.showOpenFilePicker) {
+                    try {
+                        if (!dbFileHandle) {
+                            const [fileHandle] = await window.showOpenFilePicker({
+                                types: [{
+                                    description: 'JSON Database File',
+                                    accept: {'application/json': ['.json']},
+                                }],
+                            });
+                            dbFileHandle = fileHandle;
+                        }
+                        
+                        const file = await dbFileHandle.getFile();
+                        const text = await file.text();
+                        
+                        const loadedData = JSON.parse(text);
+                        if(loadedData && Array.isArray(loadedData.members) && Array.isArray(loadedData.events)) {
+                            state = loadedData;
+                            renderCalendar();
+                            showDialog('成功', 'DBからデータを自動的に読み込みました。', false);
+                        } else {
+                            showDialog('データエラー', 'ファイル形式が正しくありません。', false);
+                        }
+                    } catch (fsErr) {
+                        // Bị chặn do iframe, gọi input fallback
+                        if (fsErr.name === 'SecurityError' || fsErr.message.includes('cross origin')) {
+                            console.warn('Iframe blocked File System API. Falling back to standard input file.');
+                            document.getElementById('fileInput').click();
+                        } else if (fsErr.name !== 'AbortError') {
+                            throw fsErr;
+                        }
+                    }
+                } else {
+                    document.getElementById('fileInput').click();
+                }
+            } catch (err) {
+                console.error('Lỗi khi đọc file:', err);
+                showDialog('エラー', 'ファイルの読み込みに失敗しました。', false);
+                dbFileHandle = null; 
+            }
+        }
+
+        function loadDatabase(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    // Validate cấu trúc đơn giản
+                    if(loadedData && Array.isArray(loadedData.members) && Array.isArray(loadedData.events)) {
+                        state = loadedData;
+                        renderCalendar();
+                        document.getElementById('fileInput').value = ''; // Reset input
+                        showDialog('成功', 'カレンダーデータの読み込みに成功しました。', false);
+                    } else {
+                        showDialog('データエラー', 'ファイル形式が正しくありません。正しいデータベースファイルを選択してください。', false);
+                    }
+                } catch (error) {
+                    showDialog('ファイルエラー', 'このJSONファイルを読み込めません。', false);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- CUSTOM DIALOG UI (THAY THẾ ALERT/CONFIRM) ---
+        function showDialog(title, message, isConfirm, onConfirmCallback) {
+            const modal = document.getElementById('msgModal');
+            document.getElementById('msgTitle').innerText = title;
+            document.getElementById('msgContent').innerText = message;
+            
+            const btnCancel = document.getElementById('btnMsgCancel');
+            const btnOk = document.getElementById('btnMsgOk');
+            const header = document.getElementById('msgHeader');
+            const icon = document.getElementById('msgIcon');
+            
+            // Xóa sự kiện cũ bằng cách clone node
+            const newBtnOk = btnOk.cloneNode(true);
+            btnOk.parentNode.replaceChild(newBtnOk, btnOk);
+            const newBtnCancel = btnCancel.cloneNode(true);
+            btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
+            
+            if (isConfirm) {
+                newBtnCancel.classList.remove('hidden');
+                header.className = 'text-white px-5 py-3 font-bold flex items-center gap-2 bg-orange-500 dark:bg-orange-600 border-b dark:border-neutral-800 text-lg';
+                icon.className = 'fas fa-exclamation-triangle';
+                newBtnOk.className = 'px-5 py-1.5 bg-orange-500 dark:bg-orange-600 text-white font-medium rounded-md hover:bg-orange-600 dark:hover:bg-orange-700 text-base shadow-sm';
+            } else {
+                newBtnCancel.classList.add('hidden');
+                header.className = 'text-white px-5 py-3 font-bold flex items-center gap-2 bg-blue-600 dark:bg-blue-900 border-b dark:border-neutral-800 text-lg';
+                icon.className = 'fas fa-info-circle';
+                newBtnOk.className = 'px-5 py-1.5 bg-blue-600 dark:bg-blue-800 text-white font-medium rounded-md hover:bg-blue-700 dark:hover:bg-blue-700 text-base shadow-sm';
+            }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            newBtnOk.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                if (onConfirmCallback) onConfirmCallback(true);
+            };
+            
+            newBtnCancel.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                if (onConfirmCallback) onConfirmCallback(false);
+            };
+        }
+
+        // Chạy ứng dụng
+        init();
+    </script>
+</body>
+</html>
