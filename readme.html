@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOLIDWORKS TEAM CALENDAR - 使い方ガイド</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'media',
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @media (prefers-color-scheme: dark) {
+            ::-webkit-scrollbar-track { background: #000000; }
+            ::-webkit-scrollbar-thumb { background: #333333; }
+            ::-webkit-scrollbar-thumb:hover { background: #555555; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-black text-slate-800 dark:text-neutral-200 font-sans text-base min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-blue-600 dark:bg-blue-900 text-white shadow-md border-b dark:border-neutral-800 sticky top-0 z-20">
+        <div class="max-w-4xl mx-auto px-5 py-4 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-white dark:bg-neutral-900 p-1 rounded shadow-sm flex items-center justify-center w-10 h-10 shrink-0">
+                    <img src="image_30ffc4.png" alt="SolidWorks Logo" class="w-full h-full object-contain" onerror="this.onerror=null; this.src='https://placehold.co/40x40/cc0000/ffffff?text=SW';">
+                </div>
+                <div>
+                    <h1 class="font-bold text-xl leading-tight">SOLIDWORKS TEAM CALENDAR</h1>
+                    <p class="text-blue-100 dark:text-blue-300 text-base">クイックガイド（使い方説明書）</p>
+                </div>
+            </div>
+            <button onclick="window.close()" class="bg-white/20 hover:bg-white/30 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-white px-4 py-1.5 rounded-md font-medium text-base flex items-center gap-2 transition-colors shrink-0">
+                <i class="fas fa-times"></i> 閉じる
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto px-5 py-8 space-y-6">
+
+        <!-- Intro -->
+        <div class="bg-white dark:bg-neutral-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-neutral-800">
+            <p class="leading-relaxed">
+                3D CADチーム（<strong>小峠・佐藤・ヤイン・栃木</strong>）向けのSolidWorks利用スケジュール管理アプリです。時間帯の重複を自動で防止し、社内サーバー上の共有DBファイルでデータを同期します。
+            </p>
+        </div>
+
+        <!-- 1. 事前準備 -->
+        <section class="bg-white dark:bg-neutral-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-neutral-800 space-y-4">
+            <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2.5 border-b border-slate-200 dark:border-neutral-800 pb-3">
+                <span class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0">1</span>
+                事前準備
+            </h2>
+            <ul class="space-y-3 list-disc list-inside leading-relaxed">
+                <li><strong>推奨ブラウザ：</strong> <strong>Google Chrome</strong> または <strong>Microsoft Edge</strong></li>
+                <li>
+                    <strong>規定DBフォルダ：</strong>
+                    <div class="mt-2 flex items-center gap-2 bg-slate-100 dark:bg-black border border-slate-300 dark:border-neutral-700 rounded-lg p-2.5">
+                        <code id="dbPathText" class="font-mono text-base text-slate-800 dark:text-neutral-200 break-all flex-1 select-all">Z:\10.技術CAD\00_共通\11_3DCAD\Solidworks Team Calendar DB</code>
+                        <button onclick="copyPath()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-medium text-base flex items-center gap-1.5 shrink-0 transition-colors">
+                            <i class="far fa-copy"></i> コピー
+                        </button>
+                    </div>
+                </li>
+                <li><strong>共有DBファイル：</strong> <code class="bg-slate-100 dark:bg-neutral-800 px-2 py-0.5 rounded font-mono text-base">SOLIDWORKS_GROUP_DB.JSON</code></li>
+                <li><span class="text-slate-500 dark:text-neutral-400">（任意）</span>HTMLファイルと同じフォルダに <code class="bg-slate-100 dark:bg-neutral-800 px-2 py-0.5 rounded font-mono text-base">image_30ffc4.png</code> を配置すると、SolidWorksロゴが表示されます。</li>
+            </ul>
+        </section>
+
+        <!-- 2. ログインと権限 -->
+        <section class="bg-white dark:bg-neutral-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-neutral-800 space-y-4">
+            <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2.5 border-b border-slate-200 dark:border-neutral-800 pb-3">
+                <span class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0">2</span>
+                ログインと権限
+            </h2>
+            <ul class="space-y-3 list-disc list-inside leading-relaxed">
+                <li><strong>初回起動時：</strong> <strong>ユーザー選択</strong>画面で自分の名前を選択します（ブラウザに自動記憶されます）。</li>
+                <li><strong>自分の行（<i class="fas fa-user-check text-blue-500"></i> マーク付き）：</strong> 予定の追加・編集・削除・ドラッグ＆ドロップが可能です。</li>
+                <li><strong>他のメンバーの行：</strong> <strong>閲覧のみ</strong>となっており、誤操作を防止します。</li>
+                <li><strong>ユーザー切り替え：</strong> 画面右上の名前の横にあるログアウトアイコン（<i class="fas fa-sign-out-alt text-slate-500 dark:text-neutral-400"></i>）から変更できます。</li>
+            </ul>
+        </section>
+
+        <!-- 3. DB連携と同期 -->
+        <section class="bg-white dark:bg-neutral-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-neutral-800 space-y-4">
+            <h2 class="text-xl font-bold text-orange-600 dark:text-orange-400 flex items-center gap-2.5 border-b border-slate-200 dark:border-neutral-800 pb-3">
+                <span class="bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0">3</span>
+                DB連携と同期（重要）
+            </h2>
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/60 rounded-lg p-4 space-y-2">
+                <div class="font-bold text-blue-800 dark:text-blue-300">初回設定（各PCで1回のみ）</div>
+                <ol class="list-decimal list-inside space-y-1.5 leading-relaxed">
+                    <li>画面上部の <strong>DB読込</strong>（または <strong>DB変更</strong>）をクリックします。規定の <code class="font-mono">Z:\...</code> パスが<strong>自動コピー</strong>されます。</li>
+                    <li>ファイル選択画面が開いたら、アドレスバーで <kbd class="px-2 py-0.5 bg-white dark:bg-neutral-800 border border-slate-300 dark:border-neutral-600 rounded font-mono text-base">Ctrl + V</kbd> → <kbd class="px-2 py-0.5 bg-white dark:bg-neutral-800 border border-slate-300 dark:border-neutral-600 rounded font-mono text-base">Enter</kbd> を押し、フォルダ内の <code class="font-mono">SOLIDWORKS_GROUP_DB.JSON</code> を選択します。</li>
+                </ol>
+            </div>
+            <ul class="space-y-3 list-disc list-inside leading-relaxed">
+                <li><strong>2回目以降の起動：</strong> 前回のファイルを記憶し、<strong>起動時に自動でDBを読み込みます</strong>（ブラウザの確認画面が出た場合は <strong>OK</strong> を押してください）。</li>
+                <li><strong>変更の保存：</strong> <strong>DB保存</strong> をクリックすると、共有DBファイルに直接上書き保存されます。</li>
+                <li><strong>DBファイルの変更：</strong> <strong>DB変更</strong> ボタン（またはツールバーのDB連携ステータス）からいつでも変更可能です。</li>
+                <li><strong>ブラウザへの一時保存：</strong> <strong>一時保存</strong> で一時バックアップし、隣の<strong>履歴アイコン</strong>（<i class="fas fa-history text-teal-600 dark:text-teal-400"></i>）から復元できます。</li>
+            </ul>
+        </section>
+
+        <!-- 4. カレンダー操作 -->
+        <section class="bg-white dark:bg-neutral-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-neutral-800 space-y-4">
+            <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2.5 border-b border-slate-200 dark:border-neutral-800 pb-3">
+                <span class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0">4</span>
+                カレンダー操作
+            </h2>
+            <ul class="space-y-3 list-disc list-inside leading-relaxed">
+                <li><strong>表示切替：</strong> <strong>週</strong>（週間表示） / <strong>日</strong>（日間表示・7:00～19:00）。日付テキストをクリックするとカレンダーピッカーが開きます。</li>
+                <li><strong>予定の登録・編集：</strong> 自分の行の空きセルまたは <strong>+</strong> ボタンをクリック（デフォルト時間：<strong>08:00 ～ 10:00</strong>、5分単位、10色のカラーラベル選択可能）。</li>
+                <li><strong>ドラッグ＆ドロップ：</strong> 予定ブロックを別の日へドラッグして日程移動できます。メンバー間で時間が重複する場合は<strong>自動でブロック</strong>されます。</li>
+            </ul>
+        </section>
+
+        <!-- 5. ステータス表示とテーマ -->
+        <section class="bg-white dark:bg-neutral-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-neutral-800 space-y-4">
+            <h2 class="text-xl font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2.5 border-b border-slate-200 dark:border-neutral-800 pb-3">
+                <span class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0">5</span>
+                ステータス表示とテーマ
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="p-3.5 rounded-lg bg-green-50 dark:bg-green-900/30 border-l-4 border-green-500 text-green-800 dark:text-green-300">
+                    <div class="font-bold flex items-center gap-2 mb-1"><i class="far fa-clock"></i> 予定</div>
+                    <p class="text-base">選択したカラーで表示されます。</p>
+                </div>
+                <div class="p-3.5 rounded-lg bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-800 dark:text-red-300">
+                    <div class="font-bold flex items-center gap-2 mb-1"><i class="fas fa-spinner fa-spin"></i> 作業中</div>
+                    <p class="text-base">開始時間になると自動で<strong>赤色</strong>になります。</p>
+                </div>
+                <div class="p-3.5 rounded-lg bg-slate-100 dark:bg-neutral-800 border-l-4 border-slate-400 dark:border-neutral-600 text-slate-600 dark:text-neutral-400">
+                    <div class="font-bold flex items-center gap-2 mb-1"><i class="fas fa-check-circle"></i> 完了</div>
+                    <p class="text-base">終了時間を過ぎると自動で<strong>グレー</strong>になります。</p>
+                </div>
+            </div>
+            <p class="pt-1 leading-relaxed">
+                <i class="fas fa-moon text-indigo-500 mr-1.5"></i><strong>外観テーマ：</strong> Windows / ブラウザの設定に合わせてライトモード・ダークモード（純黒）が自動で切り替わります。
+            </p>
+        </section>
+
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 dark:bg-neutral-800 text-white px-4 py-3 rounded-lg shadow-xl border border-slate-700 dark:border-neutral-700 hidden items-center gap-2 text-base">
+        <i class="fas fa-check-circle text-green-400"></i>
+        <span>パスをコピーしました</span>
+    </div>
+
+    <script>
+        function copyPath() {
+            const path = document.getElementById('dbPathText').innerText;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(path).then(showToast).catch(() => fallbackCopy(path));
+            } else {
+                fallbackCopy(path);
+            }
+        }
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast();
+        }
+        let timer = null;
+        function showToast() {
+            const el = document.getElementById('toast');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+                el.classList.add('hidden');
+                el.classList.remove('flex');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
